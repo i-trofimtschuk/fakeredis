@@ -29,7 +29,7 @@ a back door to the regular dictionary functionality.
         self.update(*args, **kwargs)
 
     def __setitem__(self, key, value):
-        super(StringDict, self).__setitem__(str(key), str(value))
+        super(StringDict, self).__setitem__(unicode(key), unicode(value))
 
     def update(self, *args, **kwargs):
         other = {}
@@ -101,7 +101,7 @@ class FakeStrictRedis(object):
     def get(self, name):
         value = self._db.get(name)
         if value is not None:
-            return str(value)
+            return unicode(value)
 
     def __getitem__(self, name):
         return self._db[name]
@@ -343,7 +343,7 @@ class FakeStrictRedis(object):
 
     def _strtod_key_func(self, arg):
         # str()'ing the arg is important! Don't ever remove this.
-        arg = str(arg)
+        arg = unicode(arg)
         end = c_char_p()
         val = _strtod(arg, pointer(end))
         # real Redis also does an isnan check, not sure if
@@ -366,7 +366,7 @@ class FakeStrictRedis(object):
 
     def lpush(self, name, *values):
         self._db.setdefaultnonstring(name, [])[0:0] = list(
-            reversed([str(v) for v in values]))
+            reversed([unicode(v) for v in values]))
         return len(self._db[name])
 
     def lrange(self, name, start, end):
@@ -399,7 +399,7 @@ class FakeStrictRedis(object):
 
     def rpush(self, name, *values):
         self._db.setdefaultnonstring(name, []).extend(
-            list(str(v) for v in values))
+            list(unicode(v) for v in values))
         return len(self._db[name])
 
     def lpop(self, name):
@@ -543,7 +543,7 @@ class FakeStrictRedis(object):
         Returns 1 if HSET created a new field, otherwise 0
         """
         key_is_new = key not in self._db.get(name, {})
-        self._db.setdefaultnonstring(name, {})[str(key)] = str(value)
+        self._db.setdefaultnonstring(name, {})[unicode(key)] = unicode(value)
         return 1 if key_is_new else 0
 
     def hsetnx(self, name, key, value):
@@ -553,7 +553,7 @@ class FakeStrictRedis(object):
         """
         if key in self._db.get(name, {}):
             return False
-        self._db.setdefaultnonstring(name, {})[str(key)] = str(value)
+        self._db.setdefaultnonstring(name, {})[unicode(key)] = unicode(value)
         return True
 
     def hmset(self, name, mapping):
@@ -563,7 +563,7 @@ class FakeStrictRedis(object):
         """
         if not mapping:
             raise redis.DataError("'hmset' with 'mapping' of length 0")
-        strings = dict((str(k), str(v)) for k,v in mapping.items())
+        strings = dict((unicode(k), unicode(v)) for k,v in mapping.items())
         self._db.setdefaultnonstring(name, {}).update(strings)
         return True
 
@@ -580,7 +580,7 @@ class FakeStrictRedis(object):
         "Add ``value`` to set ``name``"
         a_set = self._db.setdefaultnonstring(name, set())
         card = len(a_set)
-        a_set |= set(str(v) for v in values)
+        a_set |= set(unicode(v) for v in values)
         return len(a_set) - card
 
     def scard(self, name):
@@ -655,7 +655,7 @@ class FakeStrictRedis(object):
         "Remove ``value`` from set ``name``"
         a_set = self._db.setdefaultnonstring(name, set())
         card = len(a_set)
-        a_set -= set(str(v) for v in values)
+        a_set -= set(unicode(v) for v in values)
         return (card - len(a_set)) > 0
 
     def sunion(self, keys, *args):
@@ -695,14 +695,14 @@ class FakeStrictRedis(object):
             if value not in zset:
                 added += 1
             try:
-                zset[str(value)] = float(score)
+                zset[unicode(value)] = float(score)
             except ValueError:
                 raise redis.ResponseError("value is not a valid float")
         for value, score in kwargs.items():
             if value not in zset:
                 added += 1
             try:
-                zset[str(value)] = float(score)
+                zset[unicode(value)] = float(score)
             except ValueError:
                 raise redis.ResponseError("value is not a valid float")
         return added
@@ -756,6 +756,8 @@ class FakeStrictRedis(object):
         ``withscores`` indicates to return the scores along with the values.
         The return type is a list of (value, score) pairs
         """
+        start = int(start)
+        end = int(end)
         if end == -1:
             end = None
         else:
@@ -801,9 +803,11 @@ class FakeStrictRedis(object):
         in_order = self._get_zelements_in_order(all_items, reverse=reverse)
         matches = []
         for item in in_order:
-            if min <= all_items[item] <= max:
+            if float(min) <= all_items[item] <= float(max):
                 matches.append(item)
         if start is not None:
+            start = int(start)
+            num = int(num)
             matches = matches[start:start + num]
         if withscores:
             return [(k, all_items[k]) for k in matches]
@@ -924,7 +928,7 @@ class FakeStrictRedis(object):
         # This is what the actual redis client uses, so we'll use
         # the same type check.
         if isinstance(keys, dict):
-            keys_weights = [(k, keys[k]) for k in keys]
+            keys_weights = [(k, float(keys[k])) for k in keys]
         else:
             keys_weights = [(k, 1) for k in keys]
         for key, weight in keys_weights:
