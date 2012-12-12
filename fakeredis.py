@@ -471,7 +471,7 @@ class FakeStrictRedis(object):
             keys = [keys]
         else:
             keys = list(keys)
-        while time.time() - t1 < timeout:  # block the execution
+        while not timeout or time.time() - t1 < timeout:  # block the execution
             for key in keys:
                 if self._db.get(key, []):
                     return (key, self._db[key].pop(0))
@@ -484,7 +484,7 @@ class FakeStrictRedis(object):
             keys = [keys]
         else:
             keys = list(keys)
-        while time.time() - t1 < timeout:  # block the execution
+        while not timeout or time.time() - t1 < timeout:  # block the execution
             for key in keys:
                 if self._db.get(key, []):
                     return (key, self._db[key].pop())
@@ -492,7 +492,7 @@ class FakeStrictRedis(object):
         return None
 
     def brpoplpush(self, src, dst, timeout=30):
-        el = self.brpop(src)
+        el = self.brpop(src, timeout=timeout)
         if el is not None:
             val = el[1]
             self._db.setdefaultnonstring(dst, []).insert(0, val)
