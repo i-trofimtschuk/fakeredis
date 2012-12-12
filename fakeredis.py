@@ -1,4 +1,5 @@
 import random
+import time
 import warnings
 import copy
 from ctypes import CDLL, POINTER, c_double, c_char_p, pointer
@@ -459,34 +460,43 @@ class FakeStrictRedis(object):
             self._db.setdefaultnonstring(dst, []).insert(0, el)
         return el
 
-    def blpop(self, keys, timeout=0):
+    def blpop(self, keys, timeout=30):
         # This has to be a best effort approximation which follows
         # these rules:
         # 1) For each of those keys see if there's something we can
         #    pop from.
-        # 2) If this is not the case then simulate a timeout.
-        # This means that there's not really any blocking behavior here.
+        # 2) If this is not the case we block and poll for keys every second.
+        t1 = time.time()
         if isinstance(keys, basestring):
             keys = [keys]
         else:
             keys = list(keys)
-        for key in keys:
-            if self._db.get(key, []):
-                return (key, self._db[key].pop(0))
+        while time.time() - t1 < timeout:  # block the execution
+            for key in keys:
+                if self._db.get(key, []):
+                    return (key, self._db[key].pop(0))
+            time.sleep(1)  # only poll every second
+        return None
 
-    def brpop(self, keys, timeout=0):
+    def brpop(self, keys, timeout=30):
+        t1 = time.time()
         if isinstance(keys, basestring):
             keys = [keys]
         else:
             keys = list(keys)
-        for key in keys:
-            if self._db.get(key, []):
-                return (key, self._db[key].pop())
+        while time.time() - t1 < timeout:  # block the execution
+            for key in keys:
+                if self._db.get(key, []):
+                    return (key, self._db[key].pop())
+            time.sleep(1)  # only poll every second
+        return None
 
-    def brpoplpush(self, src, dst, timeout=0):
-        el = self.rpop(src)
+    def brpoplpush(self, src, dst, timeout=30):
+        el = self.brpop(src)
         if el is not None:
-            self._db.setdefaultnonstring(dst, []).insert(0, el)
+            val = el[1]
+            self._db.setdefaultnonstring(dst, []).insert(0, val)
+            return val
         return el
 
     def hdel(self, name, *keys):
